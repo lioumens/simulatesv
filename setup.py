@@ -28,7 +28,10 @@ setup(
         keywords='bioinformatics structural-variation simulate dna genetics, sequencing',
         packages=find_packages(),
         install_requires=['numpy'],
+        test_suite='nose.collector',
+        tests_require=['nose'],
         scripts=['simulatesv/simulatesv.py'])
+
 
         
         

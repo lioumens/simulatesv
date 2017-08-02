@@ -27,7 +27,7 @@ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 from operator import itemgetter
-from random import choice, betavariate
+from random import choice, betavariate, seed
 import argparse as ap
 import math
 import multiprocessing as mp
@@ -47,6 +47,12 @@ PARSER.add_argument(
     metavar="N",
     type=int,
     help="Number of simulated genome sequences to generate. (default=3)")
+PARSER.add_argument(
+        "-s",
+        "--seed",
+        metavar="SEED",
+        type=int,
+        help="Pseudorandom number generator seed. Set number to reproduce genomes and changes.")
 
 GENOME_GROUP = PARSER.add_mutually_exclusive_group()
 GENOME_GROUP.add_argument(
@@ -77,7 +83,7 @@ OUTPUT_GROUP.add_argument(
     metavar="FILE",
     help="Reference file for the mutated template (default=reference.fna)")
 OUTPUT_GROUP.add_argument(
-    "-c,",
+    "-c",
     "--changes",
     default="changes_",
     metavar="BASE",
@@ -227,8 +233,10 @@ def validate_template(template):
             raise ValueError("template must consist of only GATC")
 
 
-def output_template():
+def output_template(seedval=None):
     """Either generate a template or use the one provided"""
+    if seedval: np.random.seed(seedval)
+
     if ARGS.template:
         template, header = get_first_fasta(ARGS.template)
     else:
@@ -244,16 +252,16 @@ def mutate_template(template):
     stages: all deletions (trans, del), snps, then all insertions (cnvs, ins,
     trans). The reason for this logical split is so that none of the SVs or
     SNPs occur within an inserted element. This would make tracking the changes
-    very difficult. The list of changes are tuples with the format
+    very difficult. The list of changes are lists with the format
 
-    (SV, ref_idx, alt_idx, size, ref, alt)
+    [SV, ref_idx, alt_idx, size, ref, alt]
 
     The alt_idx is only for translocations to track where the translocated
     element moved in the simulated genome.
     """
     changes = []
     template, trans_queue, changes = _mutate_deletions(template, changes)
-    template, changes = _mutate_snps(template, changes)
+    template, changes = _mutate_snps(template, trans_queue, changes)
     template, changes = _mutate_insertions(template, trans_queue, changes)
     return template, changes
 
@@ -283,35 +291,37 @@ def _mutate_deletions(template, changes):
     deletion_offset = 0
     for sv_type, pos in deletion_list:
         pos = int(pos)
-        if sv_type == "DEL":
+        if pos >= len(template):
+            # deletions are already past end of genome
+            break
+        elif sv_type == "DEL":
             deletion_size = translate_random_number(
                 betavariate(.5, 2), ARGS.smallest_deletion_size, ARGS.largest_deletion_size)
         else:
             deletion_size = translate_random_number(
                 betavariate(.5, 2), ARGS.smallest_trans_size, ARGS.largest_trans_size)
-            trans_queue.append((pos + deletion_offset + 1, template[pos:pos + deletion_size]))
+            # 3rd entry "pos" is saved solely for comparison for getting deletion offset
+            trans_queue.append((pos + deletion_offset + 1, template[pos:pos + deletion_size], pos))
 
+        dna_fragment = "".join(template[pos:pos + deletion_size])
+        real_deletion_size = len(dna_fragment)
         template = template[:pos] + template[pos + deletion_size:]
         # If index extends past the end, the actual deletion will be shorter
-        real_deletion_size = len(template[pos:pos + deletion_size])
-        deletion_offset += real_deletion_size
 
-        if pos >= len(template):
-            # deletions are already past end of genome
-            pass
-        elif sv_type == "DEL":
-            dna_fragment = "".join(template[pos:pos + deletion_size])
+        if sv_type == "DEL":
             # Reference index starts from 1
-            entry = [sv_type, pos + deletion_offset + 1, ".", real_deletion_size, dna_fragment, "."]
+            entry = [sv_type, pos + deletion_offset + 1, pos + 1, real_deletion_size, dna_fragment, "."]
             changes.append(entry)
+
+        deletion_offset += real_deletion_size
 
     return template, trans_queue, changes
 
 
-def _mutate_snps(template, changes):
+def _mutate_snps(template, trans_queue, changes):
     """Returns template with snps"""
     new_template = template
-    num_snps = int(math.ceil(ARGS.snp_error_rate * len(template)))
+    num_snps = np.random.binomial(len(template), ARGS.snp_error_rate)
     snps_pos = np.random.rand(num_snps) * len(template)
     snps_pos = np.unique(np.floor(snps_pos)).astype(int)
 
@@ -319,7 +329,11 @@ def _mutate_snps(template, changes):
         original_base = new_template[pos]
         new_template[pos] = mutate_single_base(new_template[pos])
         # Reference index starts from 1
-        entry = ["SNP", pos + 1, pos + 1, "1", original_base, new_template[pos]]
+
+        # TODO: DONE the ref_idx here needs to incorporate previous deletion/translocation offset
+        deletion_offset = get_deletion_offset(pos, trans_queue, changes)
+        
+        entry = ["SNP", pos + deletion_offset +  1, pos + 1, "1", original_base, new_template[pos]]
         changes.append(entry)
     return new_template, changes
 
@@ -356,7 +370,24 @@ def _merge_sorted(*arrays):
             j += 1
     return _merge_sorted(result, *arrays[2:])
 
+# TODO: DONE probably because trans not in deletion offset.. pass the trans queue
+# TODO: DONE This position is using a location in a new template... to compare against the previous template? Could get into trouble here. Also should keep the "alt" position in the transqueue right? because tthat's really what we need to compare here... need to add to trans
+def get_deletion_offset(pos, trans_queue, changes):
+    """Helper function to calculate original position in reference genome"""
+    offset = 0
+    for struct_var in changes:
+        if struct_var[2] > pos:
+            break
+        elif struct_var[0] == "DEL":
+            offset += struct_var[3]
+    for trans in trans_queue:
+        if trans[2] > pos:
+            return offset
+        offset += len(trans[1])
+    return offset
+
 def _mutate_insertions(template, trans_queue, changes):
+    # TODO : DONE Start here tomorrow, update all previous changes, and add insertion location
     """Returns temmplate with insertions (Translocations, CNVs, and Insertions)"""
     def find_ref_index(pos):
         """Helper function to get insert changes in sorted order by reference position"""
@@ -365,15 +396,6 @@ def _mutate_insertions(template, trans_queue, changes):
                 return i
         return len(changes)
 
-    def get_deletion_offset(pos):
-        """Helper function to calculate original position in reference genome"""
-        offset = 0
-        for struct_var in changes:
-            if struct_var[1] > pos:
-                return offset
-            elif struct_var[0] == "DEL" or struct_var[0] == "TRANS":
-                offset += struct_var[3]
-        return offset
     def get_insert_list():
         """Helper function to generate one sorted list of all insertions"""
         num_insertions = np.random.binomial(
@@ -388,6 +410,7 @@ def _mutate_insertions(template, trans_queue, changes):
         trans_data = zip(trans_pos, trans_queue)
 
         insert_array = [("INS", x) for x in insertion_pos]
+        # trans[0] is the original position, trans[1] is the fragment deleted
         trans_array = [("TRANS", x, trans[0], trans[1]) for x, trans in trans_data]
         cnv_array = [("CNV", x) for x in cnv_pos]
 
@@ -396,8 +419,12 @@ def _mutate_insertions(template, trans_queue, changes):
     def update_snp_changes(pos, insertion_length):
         """Update snp alt index as insertions are being made"""
         for i, struct_var in enumerate(changes):
-            if pos < struct_var[1] and struct_var[0] == "SNP":
+            # TODO: DONE change comparison to the alt position.
+            if pos < struct_var[2] and (struct_var[0] == "SNP" or struct_var[0] == "DEL"):
                 changes[i][2] += insertion_length
+        # TODO: Check if I need to update the trans_queue? LEFTOFF to make testing to discover bugs and corner cases
+        # for i, trans in enumerate(trans_queue):
+        #     if pos < trans_var[2]
         return
 
     changes = sorted(changes, key=itemgetter(1))
@@ -406,15 +433,15 @@ def _mutate_insertions(template, trans_queue, changes):
     insertion_offset = 0
     for struct_var in insert_list:
         pos = struct_var[1]
-        ref_pos = pos + get_deletion_offset(pos) + 1
+        ref_pos = pos + get_deletion_offset(pos, trans_queue, changes) + 1
         alt_pos = pos + insertion_offset + 1
         if struct_var[0] == "INS":
             dna_fragment = "".join(generate_insertion())
-            entry = ["INS", ref_pos, ".", len(dna_fragment), ".", dna_fragment]
+            entry = ["INS", ref_pos, alt_pos, len(dna_fragment), ".", dna_fragment]
             changes.insert(find_ref_index(ref_pos), entry)
         elif struct_var[0] == "CNV":
             dna_fragment = "".join(generate_cnv())
-            entry = ["CNV", ref_pos, ".", len(dna_fragment), ".", dna_fragment]
+            entry = ["CNV", ref_pos, alt_pos, len(dna_fragment), ".", dna_fragment]
             changes.insert(find_ref_index(ref_pos), entry)
         else:
             dna_fragment = "".join(struct_var[3])
@@ -424,7 +451,7 @@ def _mutate_insertions(template, trans_queue, changes):
             changes.insert(find_ref_index(ref_pos), entry)
 
         template[pos + insertion_offset:pos + insertion_offset] = dna_fragment
-        update_snp_changes(pos, len(dna_fragment))
+        update_snp_changes(alt_pos, len(dna_fragment))
         insertion_offset += len(dna_fragment)
     return template, changes
 
@@ -492,8 +519,14 @@ def get_first_fasta(filename):
     return list("".join(seq)), header.strip()
 
 
-def generate_mutated_template(template, outfile, changes_file, header):
+def generate_mutated_template(template, outfile, changes_file, header, seedval=None):
     """Generate a mutated template and writes fasta and changes file"""
+    if seedval:
+        np.random.seed(seedval)
+        seed(seedval)
+    else:
+        np.random.seed()
+        seed()
     mutated_template, changes = mutate_template(template)
     write_fasta(outfile, mutated_template, header)
     write_changes(changes_file, changes)
@@ -502,7 +535,7 @@ def generate_mutated_template(template, outfile, changes_file, header):
 
 def main():
     """Main function for script"""
-    template = output_template()
+    template = output_template(ARGS.seed)
 
     # Setup multiprocessing jobs, one for each genome to be generated
     procs = []
@@ -510,6 +543,7 @@ def main():
         outfile = "{0}{1}.fna".format(ARGS.basename, str(i))
         changes_file = "{0}{1}.txt".format(ARGS.changes, str(i))
         header = "Simulated_{0}".format(str(i))
+        seedval = ARGS.seed + i if ARGS.seed else ARGS.seed
         procs.append(
             mp.Process(
                 target=generate_mutated_template,
@@ -517,7 +551,8 @@ def main():
                     template,
                     outfile,
                     changes_file,
-                    header)))
+                    header,
+                    seedval)))
     for process in procs:
         process.start()
     for process in procs:
