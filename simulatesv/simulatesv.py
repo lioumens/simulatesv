@@ -33,7 +33,6 @@ import argparse as ap
 import math
 import multiprocessing as mp
 import re
-import textwrap
 import numpy as np
 
 # Parse arguments into global namespace
@@ -49,11 +48,11 @@ PARSER.add_argument(
     type=int,
     help="Number of simulated genome sequences to generate. (default=3)")
 PARSER.add_argument(
-        "-s",
-        "--seed",
-        metavar="SEED",
-        type=int,
-        help="Pseudorandom number generator seed. Set number to reproduce genomes and changes.")
+    "-s",
+    "--seed",
+    metavar="SEED",
+    type=int,
+    help="Pseudorandom number generator seed. Set number to reproduce genomes and changes.")
 
 GENOME_GROUP = PARSER.add_mutually_exclusive_group()
 GENOME_GROUP.add_argument(
@@ -220,7 +219,7 @@ def write_fasta(filename, sequence, sequence_name):
     # Convert sequence to str
     if isinstance(sequence, list):
         sequence = "".join(sequence)
-    sequence = [sequence[n:n+80] for n in range(0,len(sequence), 80)]
+    sequence = [sequence[n:n+80] for n in range(0, len(sequence), 80)]
     with open(filename, "w") as outfile:
         outfile.write(header_line)
         for line in sequence:
@@ -236,7 +235,8 @@ def validate_template(template):
 
 def output_template(seedval=None):
     """Either generate a template or use the one provided"""
-    if seedval: np.random.seed(seedval)
+    if seedval:
+        np.random.seed(seedval)
 
     if ARGS.template:
         template, header = get_first_fasta(ARGS.template)
@@ -302,16 +302,18 @@ def _mutate_deletions(template, changes):
             deletion_size = translate_random_number(
                 betavariate(.5, 2), ARGS.smallest_trans_size, ARGS.largest_trans_size)
             # 3rd entry "pos" is saved solely for comparison for getting deletion offset
-            trans_queue.append([pos + deletion_offset + 1, template[pos:pos + deletion_size], pos + 1])
+            trans_queue.append(
+                [pos + deletion_offset + 1, template[pos:pos + deletion_size], pos + 1])
 
+        # If index extends past the end, the actual deletion will be shorter
         dna_fragment = "".join(template[pos:pos + deletion_size])
         real_deletion_size = len(dna_fragment)
         template = template[:pos] + template[pos + deletion_size:]
-        # If index extends past the end, the actual deletion will be shorter
 
         if sv_type == "DEL":
+            ref_idx = pos + deletion_offset + 1
             # Reference index starts from 1
-            entry = [sv_type, pos + deletion_offset + 1, pos + 1, real_deletion_size, dna_fragment, "."]
+            entry = [sv_type, ref_idx, pos + 1, real_deletion_size, dna_fragment, "."]
             changes.append(entry)
 
         deletion_offset += real_deletion_size
@@ -330,10 +332,7 @@ def _mutate_snps(template, trans_queue, changes):
         original_base = new_template[pos]
         new_template[pos] = mutate_single_base(new_template[pos])
         # Reference index starts from 1
-
-        # TODO: DONE the ref_idx here needs to incorporate previous deletion/translocation offset
         deletion_offset = get_deletion_offset(pos, trans_queue, changes)
-        
         entry = ["SNP", pos + deletion_offset +  1, pos + 1, "1", original_base, new_template[pos]]
         changes.append(entry)
     return new_template, changes
@@ -371,8 +370,6 @@ def _merge_sorted(*arrays):
             j += 1
     return _merge_sorted(result, *arrays[2:])
 
-# TODO: DONE probably because trans not in deletion offset.. pass the trans queue
-# TODO: DONE This position is using a location in a new template... to compare against the previous template? Could get into trouble here. Also should keep the "alt" position in the transqueue right? because tthat's really what we need to compare here... need to add to trans
 def get_deletion_offset(alt_pos, trans_queue, changes):
     """Helper function to calculate original position in reference genome"""
     offset = 0
@@ -388,7 +385,6 @@ def get_deletion_offset(alt_pos, trans_queue, changes):
     return offset
 
 def _mutate_insertions(template, trans_queue, changes):
-    # TODO : DONE Start here tomorrow, update all previous changes, and add insertion location
     """Returns temmplate with insertions (Translocations, CNVs, and Insertions)"""
     def find_ref_index(pos):
         """Helper function to get insert changes in sorted order by reference position"""
@@ -420,10 +416,8 @@ def _mutate_insertions(template, trans_queue, changes):
     def update_snp_changes(pos, insertion_length):
         """Update snp alt index as insertions are being made"""
         for i, struct_var in enumerate(changes):
-            # TODO: DONE change comparison to the alt position.
             if pos < struct_var[2] and (struct_var[0] == "SNP" or struct_var[0] == "DEL"):
                 changes[i][2] += insertion_length
-        # TODO: Check if I need to update the trans_queue? LEFTOFF to make testing to discover bugs and corner cases
         for i, trans in enumerate(trans_queue):
             if pos < trans[2]:
                 trans_queue[i][2] += insertion_length
