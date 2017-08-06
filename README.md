@@ -1,5 +1,6 @@
 [![PyPI](https://img.shields.io/pypi/v/simulatesv.svg)](https://pypi.python.org/pypi/simulatesv/)
 [![PyPI](https://img.shields.io/pypi/l/simulatesv.svg)](https://pypi.python.org/pypi/simulatesv/)
+[![Build Status](https://travis-ci.org/mlliou112/simulatesv.svg?branch=master)](https://travis-ci.org/mlliou112/simulatesv)
 
 simulatesv
 ===
@@ -12,14 +13,18 @@ detection tools.
 
 ## Installation
 
-The recommended method is to install via pip or git clone. You can also get the
-source distribution from [pypi](https://pypi.python.org/pypi/simulatesv/).
-
-`$ pip install simulatesv`
+The recommended method is to install via `pip` or `git clone`. You can also get the
+source distribution from [pypi](https://pypi.python.org/pypi/simulatesv/). `pip` will install all the necessary dependencies for you. 
+```
+$ pip install simulatesv 
+```
 
 or
 
-`$ git clone git@github.com:mlliou112/simulatesv.git`
+```
+$ git clone git@github.com:mlliou112/simulatesv.git
+$ python setup.py install
+```
 
 
 ## Usage
@@ -47,26 +52,34 @@ This will run the program with all defaults, making one 50 kbp reference genome 
 
 ```
 
-If you have your own genome template that you would like to simulate variants
-from, you can specify the FASTA file with the `-t FILE` option. You can also
-modify the frequency of each variant as well as their size. See the Command
-Reference below for more options.
+You may add a seed number to make the simulation reproducible. We can also
+specify the number of simulated genomes to make and the length of the generated reference.
 
 ```
-$ python simulatesv.py -t reference.fna --snp-error-rate .005 --largest-insertion-size 200
+$ python simulatesv.py --seed 10 --number 5 --length 60000
+```
+
+If you have your own genome template that you would like to simulate variants
+from, you can specify the FASTA file with the `-t FILE` option. You can also
+modify the frequency of each variant as well as their size. 
+
+See the [Command Reference](#command) below for more options.
+
+```
+$ python simulatesv.py -t reference.fna -n 20 --snp-error-rate .005 --largest-insertion-size 200
 ```
 
 #### Changes
 
 
-```
-type       ref_idx	alt_idx	size	ref	alt
-SNP	    22	     22	     1	   A	  G
-INS	    33272	  .	      17	  .      CAACTACTAATCCACCA
-```
+| type |  ref_idx |	alt_idx	| size	| ref	| alt |
+|:-----|:---------|:---------|:-------|:-------|:----|
+| SNP |    22	 |    22	|     1	 |  A	|  G |
+| INS |    3327 |	  3002  |  17	|  .   |   CAACTACTAATCCACCA |
+| TRANS | 30292 | 2000 | 12 | AATCGCGCGACT | AATCGCGCGACT |
 
 The changes file logs what changes are made to the reference sequence. A `"."`
-marks that column as not applicable.
+marks that column as a *null* dna sequence. The file is sorted by `ref_idx`.
 
 | column  | description |
 |---------|:----------------------------------------|
@@ -84,13 +97,20 @@ unknown issues.
 
 * Mutation rates for SVs and SNPs are approximate. A binomial model is used to determine the actual number of mutations based off of the given error rate.
 
-## Command Reference 
+* There is a subtle difference for the meanings of the `idx` columns between
+indels and translocations for the changes file. For translocations, the `idx` will track the dna
+sequence, and will not track the *null* sequences of where the sequence was
+deleted or inserted. That is, if you think of a translocation as one deletion
+and one insertion, there will be two columns tracking the `ref_idx` of the
+insertion and two `alt_idx` for the deletion. 
+
+## <a name="command"></a>Command Reference 
 
 ```
-simulate.py [-h] [-n N] [-l N | -t FILE] [-b BASE] [-o FILE] [-c, BASE]
-            [-se ERR] [-ie ERR] [-de ERR] [-lis N] [-lds N] [-sis N]
-            [-sds N] [-te ERR] [-lts N] [-sts N] [-ce ERR] [-lcn N]
-            [-scn N] [-lcs N] [-scs N]
+usage: simulate.py [-h] [-n N] [-s SEED] [-l N | -t FILE] [-b BASE] [-o FILE]
+                   [-c BASE] [-se ERR] [-ie ERR] [-de ERR] [-lis N] [-lds N]
+                   [-sis N] [-sds N] [-te ERR] [-lts N] [-sts N] [-ce ERR]
+                   [-lcn N] [-scn N] [-lcs N] [-scs N]
 
 Simulate DNA template sequences with known SNPs and structural variations.
 
@@ -98,6 +118,8 @@ optional arguments:
   -h, --help            show this help message and exit
   -n N, --number N      Number of simulated genome sequences to generate.
                         (default=3)
+  -s SEED, --seed SEED  Pseudorandom number generator seed. Set number to
+                        reproduce genomes and changes.
   -l N, --length N      Total length of reference genome sequence.
                         (default=50000)
   -t FILE, --template FILE
@@ -111,7 +133,7 @@ Output File Options:
   -o FILE, --output FILE
                         Reference file for the mutated template
                         (default=reference.fna)
-  -c, BASE, --changes BASE
+  -c BASE, --changes BASE
                         Basename of the changes files (default=changes_)
 
 SNP Options:
@@ -151,7 +173,6 @@ CNV Options:
                         Largest size for CNVs (default=300)
   -scs N, --smallest-cnv-size N
                         Smallest size for CNVs (default=2)
-
 ```
 
 

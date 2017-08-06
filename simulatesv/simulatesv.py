@@ -8,6 +8,7 @@ Copyright © 2017 Michael Liou
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the "Software"),
+zo
 to deal in the Software without restriction, including without limitation
 the rights to use, copy, modify, merge, publish, distribute, sublicense,
 and/or sell copies of the Software, and to permit persons to whom the
@@ -301,7 +302,7 @@ def _mutate_deletions(template, changes):
             deletion_size = translate_random_number(
                 betavariate(.5, 2), ARGS.smallest_trans_size, ARGS.largest_trans_size)
             # 3rd entry "pos" is saved solely for comparison for getting deletion offset
-            trans_queue.append((pos + deletion_offset + 1, template[pos:pos + deletion_size], pos))
+            trans_queue.append([pos + deletion_offset + 1, template[pos:pos + deletion_size], pos + 1])
 
         dna_fragment = "".join(template[pos:pos + deletion_size])
         real_deletion_size = len(dna_fragment)
@@ -372,16 +373,16 @@ def _merge_sorted(*arrays):
 
 # TODO: DONE probably because trans not in deletion offset.. pass the trans queue
 # TODO: DONE This position is using a location in a new template... to compare against the previous template? Could get into trouble here. Also should keep the "alt" position in the transqueue right? because tthat's really what we need to compare here... need to add to trans
-def get_deletion_offset(pos, trans_queue, changes):
+def get_deletion_offset(alt_pos, trans_queue, changes):
     """Helper function to calculate original position in reference genome"""
     offset = 0
     for struct_var in changes:
-        if struct_var[2] > pos:
+        if struct_var[2] > alt_pos and struct_var[0] != "TRANS":
             break
         elif struct_var[0] == "DEL":
             offset += struct_var[3]
     for trans in trans_queue:
-        if trans[2] > pos:
+        if trans[2] > alt_pos:
             return offset
         offset += len(trans[1])
     return offset
@@ -423,9 +424,9 @@ def _mutate_insertions(template, trans_queue, changes):
             if pos < struct_var[2] and (struct_var[0] == "SNP" or struct_var[0] == "DEL"):
                 changes[i][2] += insertion_length
         # TODO: Check if I need to update the trans_queue? LEFTOFF to make testing to discover bugs and corner cases
-        # for i, trans in enumerate(trans_queue):
-        #     if pos < trans_var[2]
-        return
+        for i, trans in enumerate(trans_queue):
+            if pos < trans[2]:
+                trans_queue[i][2] += insertion_length
 
     changes = sorted(changes, key=itemgetter(1))
     insert_list = get_insert_list()
@@ -433,22 +434,20 @@ def _mutate_insertions(template, trans_queue, changes):
     insertion_offset = 0
     for struct_var in insert_list:
         pos = struct_var[1]
-        ref_pos = pos + get_deletion_offset(pos, trans_queue, changes) + 1
         alt_pos = pos + insertion_offset + 1
+        ref_pos = pos + get_deletion_offset(alt_pos, trans_queue, changes) + 1
         if struct_var[0] == "INS":
             dna_fragment = "".join(generate_insertion())
             entry = ["INS", ref_pos, alt_pos, len(dna_fragment), ".", dna_fragment]
-            changes.insert(find_ref_index(ref_pos), entry)
         elif struct_var[0] == "CNV":
             dna_fragment = "".join(generate_cnv())
             entry = ["CNV", ref_pos, alt_pos, len(dna_fragment), ".", dna_fragment]
-            changes.insert(find_ref_index(ref_pos), entry)
         else:
             dna_fragment = "".join(struct_var[3])
             ref_pos = struct_var[2]
             alt_pos = struct_var[1] + insertion_offset + 1
             entry = ["TRANS", ref_pos, alt_pos, len(dna_fragment), dna_fragment, dna_fragment]
-            changes.insert(find_ref_index(ref_pos), entry)
+        changes.insert(find_ref_index(ref_pos), entry)
 
         template[pos + insertion_offset:pos + insertion_offset] = dna_fragment
         update_snp_changes(alt_pos, len(dna_fragment))
