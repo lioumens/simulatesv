@@ -333,7 +333,7 @@ def _mutate_snps(template, trans_queue, changes):
         new_template[pos] = mutate_single_base(new_template[pos])
         # Reference index starts from 1
         deletion_offset = get_deletion_offset(pos, trans_queue, changes)
-        entry = ["SNP", pos + deletion_offset +  1, pos + 1, "1", original_base, new_template[pos]]
+        entry = ["SNP", pos + deletion_offset + 1, pos + 1, "1", original_base, new_template[pos]]
         changes.append(entry)
     return new_template, changes
 
@@ -370,6 +370,7 @@ def _merge_sorted(*arrays):
             j += 1
     return _merge_sorted(result, *arrays[2:])
 
+
 def get_deletion_offset(alt_pos, trans_queue, changes):
     """Helper function to calculate original position in reference genome"""
     offset = 0
@@ -383,6 +384,7 @@ def get_deletion_offset(alt_pos, trans_queue, changes):
             return offset
         offset += len(trans[1])
     return offset
+
 
 def _mutate_insertions(template, trans_queue, changes):
     """Returns temmplate with insertions (Translocations, CNVs, and Insertions)"""
@@ -413,6 +415,7 @@ def _mutate_insertions(template, trans_queue, changes):
 
         insert_list = _merge_sorted(insert_array, cnv_array, trans_array)
         return insert_list
+
     def update_snp_changes(pos, insertion_length):
         """Update snp alt index as insertions are being made"""
         for i, struct_var in enumerate(changes):
@@ -448,11 +451,13 @@ def _mutate_insertions(template, trans_queue, changes):
         insertion_offset += len(dna_fragment)
     return template, changes
 
+
 def generate_insertion():
     """Generate a random insertion sequence within the script arguments"""
     sv_size = translate_random_number(
         betavariate(.5, 2), ARGS.smallest_insertion_size, ARGS.largest_insertion_size)
     return generate_dna(sv_size)
+
 
 def generate_cnv():
     """Generate a random CNV DNA sequence within the script arguments"""
@@ -461,6 +466,7 @@ def generate_cnv():
     num_cnv = translate_random_number(
         betavariate(.5, 2), ARGS.smallest_cnv_number, ARGS.largest_cnv_number)
     return generate_dna(sv_size) * num_cnv
+
 
 def write_changes(changes_file, changes):
     """Write SVs and SNPs to a file"""

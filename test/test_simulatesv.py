@@ -10,6 +10,7 @@ import subprocess as sp
 import os
 import glob
 
+
 def read_bases(fpath, start, end=None):
     """Helper function to read bases at certain location"""
     with open(fpath) as filein:
@@ -28,6 +29,7 @@ def read_bases(fpath, start, end=None):
             sequence = sequence.replace(
                 "\n", "") + filein.read(num_nl_chars)
         return sequence
+
 
 class TestChanges(unittest.TestCase):
     """Testing changes file reports are accurate"""
@@ -48,7 +50,6 @@ class TestChanges(unittest.TestCase):
                     line = line.strip()
                     entries.append(line.split("\t"))
             cls.changes[i] = entries
-
 
     def test_snps_ref_idx_dna(self):
         """Test base in the reference genome matches the reported base in changes file"""
