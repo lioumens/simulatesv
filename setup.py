@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
         name='simulatesv',
-        version='0.1.2',
+        version='0.2.0',
         description='Simulate structural variations and SNPs with artificial dna sequences',
         long_description='''Simulatesv is a package to generate artificial
         genomes and some variants. Simulatesv is used to generate a validation
@@ -23,7 +23,7 @@ setup(
             'Programming Language :: Python :: 3.6',
             'Topic :: Scientific/Engineering :: Bio-Informatics'
             ],
-        keywords='bioinformatics structural-variation simulate dna genetics, sequencing',
+        keywords='bioinformatics structural-variation simulate dna genetics sequencing',
         packages=find_packages(),
         install_requires=['numpy'],
         test_suite='nose.collector',
