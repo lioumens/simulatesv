@@ -239,7 +239,6 @@ class TestChanges(unittest.TestCase):
             except AttributeError:
                 check_changes(i)
 
-    @unittest.skip("just because")
     @classmethod
     def tearDownClass(cls):
         """Remove all the files that were used for testing"""
