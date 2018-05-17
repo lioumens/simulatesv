@@ -22,7 +22,7 @@ $ pip install simulatesv
 or
 
 ```
-$ git clone git@github.com:mlliou112/simulatesv.git
+$ git clone git@github.com:lioumens/simulatesv.git
 $ python setup.py install
 ```
 
