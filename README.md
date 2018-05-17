@@ -1,6 +1,7 @@
 [![PyPI](https://img.shields.io/pypi/v/simulatesv.svg)](https://pypi.python.org/pypi/simulatesv/)
 [![PyPI](https://img.shields.io/pypi/l/simulatesv.svg)](https://pypi.python.org/pypi/simulatesv/)
-[![Build Status](https://travis-ci.org/mlliou112/simulatesv.svg?branch=master)](https://travis-ci.org/mlliou112/simulatesv)
+[![Build Status](https://travis-ci.org/lioumens/simulatesv.svg?branch=master)](https://travis-ci.org/lioumens/simulatesv)
+
 
 simulatesv
 ===
